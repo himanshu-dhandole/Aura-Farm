@@ -239,7 +239,7 @@ export default function IndexPage() {
       address: RISK,
       abi: RISK_ABI,
       functionName: "mint",
-      args: ["0x0757836242234fbbfD6A0967cDb089A521276dA3", 20, 50, 30],
+      args: [address, 20, 50, 30],
     });
     await waitForTransactionReceipt(config, { hash: tx });
     alert("Risk NFT minted");
@@ -283,6 +283,7 @@ export default function IndexPage() {
       abi: VAULT_ABI,
       functionName: "withdraw",
       args: [100n * ONE],
+        gas: 5_000_000n,
     });
     await waitForTransactionReceipt(config, { hash: tx });
     alert("Withdrawn 100 AURA");

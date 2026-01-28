@@ -5,11 +5,11 @@ import "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "../../IVirtualUSDT.sol";
 
 /**
  * @title LeveragedYieldStrategy
  * @notice High Risk Strategy - Simulates leveraged yield farming
- * @dev Aggressive APY: 15-25%
  */
 contract LeveragedYieldStrategy is ERC4626, Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -18,7 +18,8 @@ contract LeveragedYieldStrategy is ERC4626, Ownable, ReentrancyGuard {
     uint256 public lastHarvest;
     uint256 public totalHarvested;
 
-    uint256 public baseAPY = 2000; // 20% base APY
+    uint256 public baseAPY = 2000;          // 20.0%
+    uint256 public yieldPeriod = 365 days;
     uint256 public lastYieldUpdate;
     uint256 public accumulatedYield;
     uint256 public lastRandomFactor = 100;
@@ -26,15 +27,19 @@ contract LeveragedYieldStrategy is ERC4626, Ownable, ReentrancyGuard {
     event Harvested(uint256 amount, uint256 timestamp);
     event YieldGenerated(uint256 amount);
     event VaultUpdated(address indexed oldVault, address indexed newVault);
+    event BaseAPYUpdated(uint256 oldAPY, uint256 newAPY);
+    event YieldPeriodUpdated(uint256 oldPeriod, uint256 newPeriod);
 
     modifier onlyVault() {
         require(msg.sender == vault, "Only vault");
         _;
     }
 
-    constructor(
-        IERC20 _asset
-    ) ERC4626(_asset) ERC20("Leveraged Yield Shares", "sLEV") Ownable(msg.sender) {
+    constructor(IERC20 _asset)
+        ERC4626(_asset)
+        ERC20("Leveraged Yield Shares", "sLEV")
+        Ownable(msg.sender)
+    {
         lastYieldUpdate = block.timestamp;
     }
 
@@ -43,6 +48,20 @@ contract LeveragedYieldStrategy is ERC4626, Ownable, ReentrancyGuard {
         address oldVault = vault;
         vault = _vault;
         emit VaultUpdated(oldVault, _vault);
+    }
+
+    function setBaseAPY(uint256 _baseAPY) external onlyOwner {
+        require(_baseAPY > 0 && _baseAPY <= 10000, "APY out of reasonable range");
+        uint256 oldAPY = baseAPY;
+        baseAPY = _baseAPY;
+        emit BaseAPYUpdated(oldAPY, _baseAPY);
+    }
+
+    function setYieldPeriod(uint256 _yieldPeriod) external onlyOwner {
+        require(_yieldPeriod > 0, "Invalid period");
+        uint256 oldPeriod = yieldPeriod;
+        yieldPeriod = _yieldPeriod;
+        emit YieldPeriodUpdated(oldPeriod, _yieldPeriod);
     }
 
     function _generateYield() internal {
@@ -55,7 +74,7 @@ contract LeveragedYieldStrategy is ERC4626, Ownable, ReentrancyGuard {
             return;
         }
 
-        uint256 baseYield = (baseAssets * baseAPY * timeElapsed) / (365 days * 10000);
+        uint256 baseYield = (baseAssets * baseAPY * timeElapsed) / (yieldPeriod * 10000);
 
         uint256 randomSeed = uint256(
             keccak256(
@@ -71,25 +90,27 @@ contract LeveragedYieldStrategy is ERC4626, Ownable, ReentrancyGuard {
         lastRandomFactor = randomFactor;
 
         uint256 yieldAmount = (baseYield * randomFactor) / 100;
+
+        if (yieldAmount > 0) {
+            IVirtualUSDT(address(asset())).mint(address(this), yieldAmount);
+        }
+
         accumulatedYield += yieldAmount;
         lastYieldUpdate = block.timestamp;
 
         emit YieldGenerated(yieldAmount);
     }
 
-    function deposit(
-        uint256 assets,
-        address receiver
-    ) public virtual override onlyVault nonReentrant returns (uint256) {
+    function deposit(uint256 assets, address receiver)
+        public virtual override onlyVault nonReentrant returns (uint256)
+    {
         _generateYield();
         return super.deposit(assets, receiver);
     }
 
-    function withdraw(
-        uint256 assets,
-        address receiver,
-        address /* owner */
-    ) public virtual override onlyVault nonReentrant returns (uint256) {
+    function withdraw(uint256 assets, address receiver, address /* owner */)
+        public virtual override onlyVault nonReentrant returns (uint256)
+    {
         _generateYield();
 
         uint256 balance = IERC20(asset()).balanceOf(address(this));
@@ -108,7 +129,7 @@ contract LeveragedYieldStrategy is ERC4626, Ownable, ReentrancyGuard {
         uint256 pendingYield = 0;
 
         if (timeElapsed > 0 && baseAssets > 0) {
-            uint256 baseYield = (baseAssets * baseAPY * timeElapsed) / (365 days * 10000);
+            uint256 baseYield = (baseAssets * baseAPY * timeElapsed) / (yieldPeriod * 10000);
             pendingYield = (baseYield * lastRandomFactor) / 100;
         }
 
@@ -127,6 +148,9 @@ contract LeveragedYieldStrategy is ERC4626, Ownable, ReentrancyGuard {
             totalHarvested += harvestedAmount;
             accumulatedYield = 0;
             lastHarvest = block.timestamp;
+
+            IERC20(asset()).safeTransfer(vault, harvestedAmount);
+
             emit Harvested(harvestedAmount, block.timestamp);
         }
 

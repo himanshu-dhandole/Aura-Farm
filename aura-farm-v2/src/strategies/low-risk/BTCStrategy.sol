@@ -5,6 +5,8 @@ import "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "../../IVirtualUSDT.sol";
+
 
 /**
  * @title BTCStrategy
@@ -18,8 +20,8 @@ contract BTCStrategy is ERC4626, Ownable, ReentrancyGuard {
     uint256 public lastHarvest;
     uint256 public totalHarvested;
 
-    // Simulated yield parameters
-    uint256 public baseAPY = 400; // 4% base APY
+    uint256 public baseAPY = 400; // 4% base APY (adjustable)
+    uint256 public yieldPeriod = 365 days; // Configurable period for testing (default annual)
     uint256 public lastYieldUpdate;
     uint256 public accumulatedYield;
     uint256 public lastRandomFactor = 100;
@@ -27,6 +29,8 @@ contract BTCStrategy is ERC4626, Ownable, ReentrancyGuard {
     event Harvested(uint256 amount, uint256 timestamp);
     event YieldGenerated(uint256 amount);
     event VaultUpdated(address indexed oldVault, address indexed newVault);
+    event BaseAPYUpdated(uint256 oldAPY, uint256 newAPY);
+    event YieldPeriodUpdated(uint256 oldPeriod, uint256 newPeriod);
 
     modifier onlyVault() {
         require(msg.sender == vault, "Only vault");
@@ -46,6 +50,20 @@ contract BTCStrategy is ERC4626, Ownable, ReentrancyGuard {
         emit VaultUpdated(oldVault, _vault);
     }
 
+    function setBaseAPY(uint256 _baseAPY) external onlyOwner {
+        require(_baseAPY > 0 && _baseAPY <= 10000, "APY out of reasonable range");
+        uint256 oldAPY = baseAPY;
+        baseAPY = _baseAPY;
+        emit BaseAPYUpdated(oldAPY, _baseAPY);
+    }
+
+    function setYieldPeriod(uint256 _yieldPeriod) external onlyOwner {
+        require(_yieldPeriod > 0, "Invalid period");
+        uint256 oldPeriod = yieldPeriod;
+        yieldPeriod = _yieldPeriod;
+        emit YieldPeriodUpdated(oldPeriod, _yieldPeriod);
+    }
+
     function _generateYield() internal {
         uint256 timeElapsed = block.timestamp - lastYieldUpdate;
         if (timeElapsed == 0) return;
@@ -56,9 +74,8 @@ contract BTCStrategy is ERC4626, Ownable, ReentrancyGuard {
             return;
         }
 
-        uint256 baseYield = (baseAssets * baseAPY * timeElapsed) / (365 days * 10000);
+        uint256 baseYield = (baseAssets * baseAPY * timeElapsed) / (yieldPeriod * 10000);
 
-        // Generate randomness (±10% for low risk)
         uint256 randomSeed = uint256(
             keccak256(
                 abi.encodePacked(
@@ -73,6 +90,12 @@ contract BTCStrategy is ERC4626, Ownable, ReentrancyGuard {
         lastRandomFactor = randomFactor;
 
         uint256 yieldAmount = (baseYield * randomFactor) / 100;
+
+        if (yieldAmount > 0) {
+            // Mint real tokens to back the yield
+            IVirtualUSDT(address(asset())).mint(address(this), yieldAmount);
+        }
+
         accumulatedYield += yieldAmount;
         lastYieldUpdate = block.timestamp;
 
@@ -110,7 +133,7 @@ contract BTCStrategy is ERC4626, Ownable, ReentrancyGuard {
         uint256 pendingYield = 0;
 
         if (timeElapsed > 0 && baseAssets > 0) {
-            uint256 baseYield = (baseAssets * baseAPY * timeElapsed) / (365 days * 10000);
+            uint256 baseYield = (baseAssets * baseAPY * timeElapsed) / (yieldPeriod * 10000);
             pendingYield = (baseYield * lastRandomFactor) / 100;
         }
 
@@ -129,6 +152,10 @@ contract BTCStrategy is ERC4626, Ownable, ReentrancyGuard {
             totalHarvested += harvestedAmount;
             accumulatedYield = 0;
             lastHarvest = block.timestamp;
+
+            // Transfer real tokens to vault
+            IERC20(asset()).safeTransfer(vault, harvestedAmount);
+
             emit Harvested(harvestedAmount, block.timestamp);
         }
 

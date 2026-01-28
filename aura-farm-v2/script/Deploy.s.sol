@@ -2,204 +2,150 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
+import "forge-std/console2.sol";
+
 import "../src/VirtualUSDT.sol";
 import "../src/RiskNFT.sol";
 import "../src/AuraVault.sol";
+
+// Low-risk strategies
 import "../src/strategies/low-risk/BTCStrategy.sol";
 import "../src/strategies/low-risk/ETHStrategy.sol";
 import "../src/strategies/low-risk/BlueChipStrategy.sol";
+
+// Medium-risk strategies
 import "../src/strategies/medium-risk/DeFiLendingStrategy.sol";
 import "../src/strategies/medium-risk/AltcoinStakingStrategy.sol";
+
+// High-risk strategies
 import "../src/strategies/high-risk/LeveragedYieldStrategy.sol";
 import "../src/strategies/high-risk/MemecoinFarmingStrategy.sol";
 
-/**
- * @title DeployAuraProtocol
- * @notice Comprehensive deployment script for Aura Protocol with Dynamic Rebalancing
- */
 contract DeployAuraProtocol is Script {
-    // Contracts
     VirtualUSDT public vUSDT;
     RiskNFT public riskNFT;
     AuraVault public vault;
-    
-    // Low Risk Strategies
-    BTCStrategy public btcStrategy;
-    ETHStrategy public ethStrategy;
-    BlueChipStrategy public blueChipStrategy;
-    
-    // Medium Risk Strategies
-    DeFiLendingStrategy public defiLendingStrategy;
-    AltcoinStakingStrategy public altcoinStakingStrategy;
-    
-    // High Risk Strategies
-    LeveragedYieldStrategy public leveragedYieldStrategy;
-    MemecoinFarmingStrategy public memecoinFarmingStrategy;
+
+    BTCStrategy public btc;
+    ETHStrategy public eth;
+    BlueChipStrategy public bluechip;
+    DeFiLendingStrategy public defi;
+    AltcoinStakingStrategy public alt;
+    LeveragedYieldStrategy public lev;
+    MemecoinFarmingStrategy public meme;
 
     address public deployer;
     address public feeRecipient;
 
+    uint256 constant TEST_YIELD_PERIOD = 360; // 6 minutes = 1 "year" of yield
+
     function run() external {
-        deployer = vm.addr(vm.envUint("PRIVATE_KEY"));
-        feeRecipient = deployer; // Can be changed to treasury address
-        
-        vm.startBroadcast(vm.envUint("PRIVATE_KEY"));
+        uint256 privateKey = vm.envUint("PRIVATE_KEY");
+        deployer = vm.addr(privateKey);
+        feeRecipient = deployer; // ← change in .env if needed
 
-        console.log("====================================");
-        console.log("Deploying Aura Protocol v2.0");
-        console.log("With Dynamic Rebalancing");
-        console.log("Deployer:", deployer);
-        console.log("====================================");
+        vm.startBroadcast(privateKey);
 
-        // Step 1: Deploy VirtualUSDT
-        console.log("\n1. Deploying VirtualUSDT...");
+        console2.log("=====================================");
+        console2.log("Deploying Aura Protocol - TEST MODE");
+        console2.log("Yield period set to 6 minutes for all strategies");
+        console2.log("Deployer:     ", deployer);
+        console2.log("Fee Recipient:", feeRecipient);
+        console2.log("=====================================");
+
+        // 1. VirtualUSDT
         vUSDT = new VirtualUSDT();
-        console.log("VirtualUSDT deployed at:", address(vUSDT));
+        console2.log("VirtualUSDT :", address(vUSDT));
 
-        // Step 2: Deploy RiskNFT
-        console.log("\n2. Deploying RiskNFT...");
+        // 2. RiskNFT
         riskNFT = new RiskNFT();
-        console.log("RiskNFT deployed at:", address(riskNFT));
+        console2.log("RiskNFT :", address(riskNFT));
 
-        // Step 3: Deploy AuraVault
-        console.log("\n3. Deploying AuraVault...");
-        vault = new AuraVault(
-            address(vUSDT),
-            address(riskNFT),
-            feeRecipient
-        );
-        console.log("AuraVault deployed at:", address(vault));
+        // 3. AuraVault
+        vault = new AuraVault(address(vUSDT), address(riskNFT), feeRecipient);
+        console2.log("AuraVault :", address(vault));
 
-        // Step 4: Deploy Low Risk Strategies
-        console.log("\n4. Deploying Low Risk Strategies...");
-        
-        btcStrategy = new BTCStrategy(vUSDT);
-        console.log("BTCStrategy deployed at:", address(btcStrategy));
-        btcStrategy.setVault(address(vault));
-        
-        ethStrategy = new ETHStrategy(vUSDT);
-        console.log("ETHStrategy deployed at:", address(ethStrategy));
-        ethStrategy.setVault(address(vault));
-        
-        blueChipStrategy = new BlueChipStrategy(vUSDT);
-        console.log("BlueChipStrategy deployed at:", address(blueChipStrategy));
-        blueChipStrategy.setVault(address(vault));
+        // 4. Deploy strategies
+        btc = new BTCStrategy(IERC20(address(vUSDT)));
+        eth = new ETHStrategy(IERC20(address(vUSDT)));
+        bluechip = new BlueChipStrategy(IERC20(address(vUSDT)));
+        defi = new DeFiLendingStrategy(IERC20(address(vUSDT)));
+        alt = new AltcoinStakingStrategy(IERC20(address(vUSDT)));
+        lev = new LeveragedYieldStrategy(IERC20(address(vUSDT)));
+        meme = new MemecoinFarmingStrategy(IERC20(address(vUSDT)));
 
-        // Step 5: Deploy Medium Risk Strategies
-        console.log("\n5. Deploying Medium Risk Strategies...");
-        
-        defiLendingStrategy = new DeFiLendingStrategy(vUSDT);
-        console.log("DeFiLendingStrategy deployed at:", address(defiLendingStrategy));
-        defiLendingStrategy.setVault(address(vault));
-        
-        altcoinStakingStrategy = new AltcoinStakingStrategy(vUSDT);
-        console.log("AltcoinStakingStrategy deployed at:", address(altcoinStakingStrategy));
-        altcoinStakingStrategy.setVault(address(vault));
+        console2.log("Strategies deployed");
 
-        // Step 6: Deploy High Risk Strategies
-        console.log("\n6. Deploying High Risk Strategies...");
-        
-        leveragedYieldStrategy = new LeveragedYieldStrategy(vUSDT);
-        console.log("LeveragedYieldStrategy deployed at:", address(leveragedYieldStrategy));
-        leveragedYieldStrategy.setVault(address(vault));
-        
-        memecoinFarmingStrategy = new MemecoinFarmingStrategy(vUSDT);
-        console.log("MemecoinFarmingStrategy deployed at:", address(memecoinFarmingStrategy));
-        memecoinFarmingStrategy.setVault(address(vault));
+        // 5. Set vault + 6-minute yield period on ALL strategies
+        address[] memory strats = new address[](7);
+        strats[0] = address(btc);
+        strats[1] = address(eth);
+        strats[2] = address(bluechip);
+        strats[3] = address(defi);
+        strats[4] = address(alt);
+        strats[5] = address(lev);
+        strats[6] = address(meme);
 
-        // Step 7: Configure Low Risk Tier (Tier 0) - MUST SUM TO 100%
-        console.log("\n7. Configuring Low Risk Tier (Tier 0)...");
-        vault.addStrategy(0, address(btcStrategy), 50);        // 50% BTC
-        vault.addStrategy(0, address(ethStrategy), 30);        // 30% ETH
-        vault.addStrategy(0, address(blueChipStrategy), 20);   // 20% BlueChip
-        console.log("Low Risk allocations: BTC 50%, ETH 30%, BlueChip 20% = 100%");
+        for (uint256 i = 0; i < strats.length; i++) {
+            // Set vault
+            (bool successVault,) = strats[i].call(
+                abi.encodeWithSignature("setVault(address)", address(vault))
+            );
+            require(successVault, "setVault failed");
 
-        // Verify Low Risk allocation
-        // (bool isValid0, uint256 totalAlloc0) = vault.isTierAllocationValid(0);
-        // require(isValid0, "Low Risk tier allocation must sum to 100%");
-        // console.log("Low Risk tier validated: Total allocation =", totalAlloc0);
+            // Set test yield period (6 minutes)
+            (bool successPeriod,) = strats[i].call(
+                abi.encodeWithSignature("setYieldPeriod(uint256)", TEST_YIELD_PERIOD)
+            );
+            require(successPeriod, "setYieldPeriod failed");
 
-        // Step 8: Configure Medium Risk Tier (Tier 1) - MUST SUM TO 100%
-        console.log("\n8. Configuring Medium Risk Tier (Tier 1)...");
-        vault.addStrategy(1, address(defiLendingStrategy), 60);      // 60% DeFi Lending
-        vault.addStrategy(1, address(altcoinStakingStrategy), 40);   // 40% Altcoin Staking
-        console.log("Medium Risk allocations: DeFi 60%, Altcoin 40% = 100%");
+            // Add as minter to VirtualUSDT
+            vUSDT.addMinter(strats[i]);
 
-        // // Verify Medium Risk allocation
-        // (bool isValid1, uint256 totalAlloc1) = vault.isTierAllocationValid(1);
-        // require(isValid1, "Medium Risk tier allocation must sum to 100%");
-        // console.log("Medium Risk tier validated: Total allocation =", totalAlloc1);
+            console2.log("Configured strategy:", strats[i]);
+        }
 
-        // Step 9: Configure High Risk Tier (Tier 2) - MUST SUM TO 100%
-        console.log("\n9. Configuring High Risk Tier (Tier 2)...");
-        vault.addStrategy(2, address(leveragedYieldStrategy), 70);   // 70% Leveraged Yield
-        vault.addStrategy(2, address(memecoinFarmingStrategy), 30);  // 30% Memecoin Farming
-        console.log("High Risk allocations: Leveraged 70%, Memecoin 30% = 100%");
+        // 6. Add strategies to vault tiers (100% sum per tier)
+        console2.log("\nAdding strategies to tiers...");
 
-        // Verify High Risk allocation
-        // (bool isValid2, uint256 totalAlloc2) = vault.isTierAllocationValid(2);
-        // require(isValid2, "High Risk tier allocation must sum to 100%");
-        // console.log("High Risk tier validated: Total allocation =", totalAlloc2);
+        // Tier 0: Low Risk
+        vault.addStrategy(0, address(btc), 40);
+        vault.addStrategy(0, address(eth), 40);
+        vault.addStrategy(0, address(bluechip), 20);
 
-        // Step 10: Mint test Risk NFTs
-        // console.log("\n10. Minting test Risk NFTs...");
-        
-        // // Conservative profile (50% Low, 30% Med, 20% High)
-        // address testUser1 = deployer;
-        // riskNFT.mint(testUser1, 50, 30, 20);
-        // console.log("Minted conservative profile for:", testUser1);
+        // Tier 1: Medium Risk
+        vault.addStrategy(1, address(defi), 60);
+        vault.addStrategy(1, address(alt), 40);
 
-        // // Step 11: Airdrop test USDT
-        // console.log("\n11. Airdropping test vUSDT...");
-        // vUSDT.mint(testUser1, 10_000e18);
-        // console.log("Airdropped 10,000 vUSDT to:", testUser1);
+        // Tier 2: High Risk
+        vault.addStrategy(2, address(lev), 60);
+        vault.addStrategy(2, address(meme), 40);
 
         vm.stopBroadcast();
 
-        // Print comprehensive summary
-        console.log("\n====================================");
-        console.log("DEPLOYMENT SUMMARY");
-        console.log("====================================");
-        console.log("Core Contracts:");
-        console.log("  VirtualUSDT:", address(vUSDT));
-        console.log("  RiskNFT:", address(riskNFT));
-        console.log("  AuraVault:", address(vault));
-        console.log("  Fee Recipient:", feeRecipient);
-        
-        console.log("\nLow Risk Strategies (Tier 0) - Total: 100%");
-        console.log("  BTCStrategy (50%):", address(btcStrategy));
-        console.log("  ETHStrategy (30%):", address(ethStrategy));
-        console.log("  BlueChipStrategy (20%):", address(blueChipStrategy));
-        
-        console.log("\nMedium Risk Strategies (Tier 1) - Total: 100%");
-        console.log("  DeFiLendingStrategy (60%):", address(defiLendingStrategy));
-        console.log("  AltcoinStakingStrategy (40%):", address(altcoinStakingStrategy));
-        
-        console.log("\nHigh Risk Strategies (Tier 2) - Total: 100%");
-        console.log("  LeveragedYieldStrategy (70%):", address(leveragedYieldStrategy));
-        console.log("  MemecoinFarmingStrategy (30%):", address(memecoinFarmingStrategy));
-        
-        console.log("\nTest Users:");
-        // console.log("  User1 (Conservative - 50/30/20):", testUser1);
+        // ──────────────────────────────────────────────────────────────
+        // FINAL SUMMARY
+        // ──────────────────────────────────────────────────────────────
+        console2.log("\n=====================================");
+        console2.log("DEPLOYMENT SUCCESSFUL (TEST MODE)");
+        console2.log("Yield period = 6 minutes on all strategies");
+        console2.log("=====================================");
+        console2.log("VirtualUSDT:      ", address(vUSDT));
+        console2.log("RiskNFT:          ", address(riskNFT));
+        console2.log("AuraVault:        ", address(vault));
+        console2.log("Fee Recipient:    ", feeRecipient);
 
-        console.log("\n====================================");
-        console.log("NEW FEATURES ENABLED:");
-        console.log("====================================");
-        console.log("1. Dynamic Allocation Updates");
-        console.log("   - Use: vault.updateTierAllocations(tier, indices[], allocations[])");
-        console.log("   - Enforces: Allocations MUST sum to exactly 100%");
-        console.log("\n2. Auto-Rebalancing");
-        console.log("   - Per tier: vault.rebalanceTier(tier)");
-        console.log("   - All tiers: vault.rebalance()");
-        console.log("   - Moves existing funds to match target allocations");
-        console.log("\n3. Allocation Validation");
-        console.log("   - Check: vault.isTierAllocationValid(tier)");
-        console.log("   - Details: vault.getTierAllocationDetails(tier)");
-        console.log("====================================\n");
+        console2.log("\nLow Risk (Tier 0):");
+        console2.log("  BTC:      ", address(btc));
+        console2.log("  ETH:      ", address(eth));
+        console2.log("  BlueChip: ", address(bluechip));
+
+        console2.log("\nMedium Risk (Tier 1):");
+        console2.log("  DeFiLending:    ", address(defi));
+        console2.log("  AltcoinStaking: ", address(alt));
+
+        console2.log("\nHigh Risk (Tier 2):");
+        console2.log("  LeveragedYield: ", address(lev));
+        console2.log("  MemecoinFarming:", address(meme));
     }
 }
-
-
-
-
-

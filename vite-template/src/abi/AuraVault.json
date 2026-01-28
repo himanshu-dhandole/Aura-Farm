@@ -187,25 +187,25 @@
 			{
 				"indexed": false,
 				"internalType": "uint256",
-				"name": "auraTokensMinted",
+				"name": "shares",
 				"type": "uint256"
 			},
 			{
 				"indexed": false,
 				"internalType": "uint256",
-				"name": "lowRiskAlloc",
+				"name": "low",
 				"type": "uint256"
 			},
 			{
 				"indexed": false,
 				"internalType": "uint256",
-				"name": "medRiskAlloc",
+				"name": "med",
 				"type": "uint256"
 			},
 			{
 				"indexed": false,
 				"internalType": "uint256",
-				"name": "highRiskAlloc",
+				"name": "high",
 				"type": "uint256"
 			}
 		],
@@ -254,19 +254,6 @@
 			}
 		],
 		"name": "OwnershipTransferred",
-		"type": "event"
-	},
-	{
-		"anonymous": false,
-		"inputs": [
-			{
-				"indexed": false,
-				"internalType": "uint256",
-				"name": "timestamp",
-				"type": "uint256"
-			}
-		],
-		"name": "Rebalanced",
 		"type": "event"
 	},
 	{
@@ -400,13 +387,13 @@
 			{
 				"indexed": false,
 				"internalType": "uint256",
-				"name": "auraTokensBurned",
+				"name": "shares",
 				"type": "uint256"
 			},
 			{
 				"indexed": false,
 				"internalType": "uint256",
-				"name": "amountReceived",
+				"name": "amount",
 				"type": "uint256"
 			}
 		],
@@ -520,12 +507,18 @@
 		"inputs": [
 			{
 				"internalType": "uint256",
-				"name": "amount",
+				"name": "assets",
 				"type": "uint256"
 			}
 		],
 		"name": "deposit",
-		"outputs": [],
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "shares",
+				"type": "uint256"
+			}
+		],
 		"stateMutability": "nonpayable",
 		"type": "function"
 	},
@@ -840,13 +833,6 @@
 		"type": "function"
 	},
 	{
-		"inputs": [],
-		"name": "rebalance",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
 		"inputs": [
 			{
 				"internalType": "uint8",
@@ -911,11 +897,6 @@
 				"internalType": "string",
 				"name": "name",
 				"type": "string"
-			},
-			{
-				"internalType": "uint256",
-				"name": "totalAllocated",
-				"type": "uint256"
 			}
 		],
 		"stateMutability": "view",
@@ -989,19 +970,6 @@
 	{
 		"inputs": [],
 		"name": "totalSupply",
-		"outputs": [
-			{
-				"internalType": "uint256",
-				"name": "",
-				"type": "uint256"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [],
-		"name": "totalValueLocked",
 		"outputs": [
 			{
 				"internalType": "uint256",
@@ -1144,12 +1112,18 @@
 		"inputs": [
 			{
 				"internalType": "uint256",
-				"name": "auraAmount",
+				"name": "shares",
 				"type": "uint256"
 			}
 		],
 		"name": "withdraw",
-		"outputs": [],
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "assets",
+				"type": "uint256"
+			}
+		],
 		"stateMutability": "nonpayable",
 		"type": "function"
 	}

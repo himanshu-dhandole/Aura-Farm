@@ -9,11 +9,25 @@ contract VirtualUSDT is ERC20, Ownable {
 
     // Track which addresses have already claimed their limited mint
     mapping(address => bool) public hasClaimed;
+    mapping(address => bool) public minters;
 
-    constructor () ERC20("virtual USDT", "VUSDT") Ownable(msg.sender) {}
+    constructor() ERC20("virtual USDT", "VUSDT") Ownable(msg.sender) {}
 
-    function mint(address _to, uint256 _amount) public onlyOwner {
+    function mint(address _to, uint256 _amount) public {
+        require(
+            msg.sender == owner() || minters[msg.sender],
+            "Not owner or minter"
+        );
         _mint(_to, _amount);
+    }
+
+    function addMinter(address _minter) external onlyOwner {
+        require(_minter != address(0), "Invalid minter");
+        minters[_minter] = true;
+    }
+
+    function removeMinter(address _minter) external onlyOwner {
+        minters[_minter] = false;
     }
 
     // Allow each address to mint 10,000 VUSDT only once
