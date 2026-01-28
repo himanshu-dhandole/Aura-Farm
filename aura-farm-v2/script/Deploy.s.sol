@@ -15,7 +15,7 @@ import "../src/strategies/high-risk/MemecoinFarmingStrategy.sol";
 
 /**
  * @title DeployAuraProtocol
- * @notice Comprehensive deployment script for the entire Aura Protocol
+ * @notice Comprehensive deployment script for Aura Protocol with Dynamic Rebalancing
  */
 contract DeployAuraProtocol is Script {
     // Contracts
@@ -46,7 +46,8 @@ contract DeployAuraProtocol is Script {
         vm.startBroadcast(vm.envUint("PRIVATE_KEY"));
 
         console.log("====================================");
-        console.log("Deploying Aura Protocol");
+        console.log("Deploying Aura Protocol v2.0");
+        console.log("With Dynamic Rebalancing");
         console.log("Deployer:", deployer);
         console.log("====================================");
 
@@ -106,59 +107,99 @@ contract DeployAuraProtocol is Script {
         console.log("MemecoinFarmingStrategy deployed at:", address(memecoinFarmingStrategy));
         memecoinFarmingStrategy.setVault(address(vault));
 
-        // Step 7: Configure Low Risk Tier (Tier 0)
-        console.log("\n7. Configuring Low Risk Tier...");
-        vault.addStrategy(0, address(btcStrategy), 60);        // 60% BTC
-        vault.addStrategy(0, address(ethStrategy), 20);        // 20% ETH
+        // Step 7: Configure Low Risk Tier (Tier 0) - MUST SUM TO 100%
+        console.log("\n7. Configuring Low Risk Tier (Tier 0)...");
+        vault.addStrategy(0, address(btcStrategy), 50);        // 50% BTC
+        vault.addStrategy(0, address(ethStrategy), 30);        // 30% ETH
         vault.addStrategy(0, address(blueChipStrategy), 20);   // 20% BlueChip
+        console.log("Low Risk allocations: BTC 50%, ETH 30%, BlueChip 20% = 100%");
 
-        // Step 8: Configure Medium Risk Tier (Tier 1)
-        console.log("\n8. Configuring Medium Risk Tier...");
+        // Verify Low Risk allocation
+        // (bool isValid0, uint256 totalAlloc0) = vault.isTierAllocationValid(0);
+        // require(isValid0, "Low Risk tier allocation must sum to 100%");
+        // console.log("Low Risk tier validated: Total allocation =", totalAlloc0);
+
+        // Step 8: Configure Medium Risk Tier (Tier 1) - MUST SUM TO 100%
+        console.log("\n8. Configuring Medium Risk Tier (Tier 1)...");
         vault.addStrategy(1, address(defiLendingStrategy), 60);      // 60% DeFi Lending
         vault.addStrategy(1, address(altcoinStakingStrategy), 40);   // 40% Altcoin Staking
+        console.log("Medium Risk allocations: DeFi 60%, Altcoin 40% = 100%");
 
-        // Step 9: Configure High Risk Tier (Tier 2)
-        console.log("\n9. Configuring High Risk Tier...");
+        // // Verify Medium Risk allocation
+        // (bool isValid1, uint256 totalAlloc1) = vault.isTierAllocationValid(1);
+        // require(isValid1, "Medium Risk tier allocation must sum to 100%");
+        // console.log("Medium Risk tier validated: Total allocation =", totalAlloc1);
+
+        // Step 9: Configure High Risk Tier (Tier 2) - MUST SUM TO 100%
+        console.log("\n9. Configuring High Risk Tier (Tier 2)...");
         vault.addStrategy(2, address(leveragedYieldStrategy), 70);   // 70% Leveraged Yield
         vault.addStrategy(2, address(memecoinFarmingStrategy), 30);  // 30% Memecoin Farming
+        console.log("High Risk allocations: Leveraged 70%, Memecoin 30% = 100%");
+
+        // Verify High Risk allocation
+        // (bool isValid2, uint256 totalAlloc2) = vault.isTierAllocationValid(2);
+        // require(isValid2, "High Risk tier allocation must sum to 100%");
+        // console.log("High Risk tier validated: Total allocation =", totalAlloc2);
 
         // Step 10: Mint test Risk NFTs
-        console.log("\n10. Minting test Risk NFTs...");
+        // console.log("\n10. Minting test Risk NFTs...");
         
-        // Conservative profile (50% Low, 30% Med, 20% High)
-        address testUser1 = deployer;
-        riskNFT.mint(testUser1, 50, 30, 20);
-        console.log("Minted conservative profile for:", testUser1);
-       
+        // // Conservative profile (50% Low, 30% Med, 20% High)
+        // address testUser1 = deployer;
+        // riskNFT.mint(testUser1, 50, 30, 20);
+        // console.log("Minted conservative profile for:", testUser1);
 
-        // Step 11: Airdrop test USDT
-        console.log("\n11. Airdropping test vUSDT...");
-        vUSDT.mint(testUser1, 10_000e18);
- 
-        console.log("Airdropped 10,000 vUSDT to each test user");
+        // // Step 11: Airdrop test USDT
+        // console.log("\n11. Airdropping test vUSDT...");
+        // vUSDT.mint(testUser1, 10_000e18);
+        // console.log("Airdropped 10,000 vUSDT to:", testUser1);
 
         vm.stopBroadcast();
 
-        // Print summary
+        // Print comprehensive summary
         console.log("\n====================================");
         console.log("DEPLOYMENT SUMMARY");
         console.log("====================================");
-        console.log("VirtualUSDT:", address(vUSDT));
-        console.log("RiskNFT:", address(riskNFT));
-        console.log("AuraVault:", address(vault));
-        console.log("\nLow Risk Strategies:");
-        console.log("  BTCStrategy (60%):", address(btcStrategy));
-        console.log("  ETHStrategy (20%):", address(ethStrategy));
+        console.log("Core Contracts:");
+        console.log("  VirtualUSDT:", address(vUSDT));
+        console.log("  RiskNFT:", address(riskNFT));
+        console.log("  AuraVault:", address(vault));
+        console.log("  Fee Recipient:", feeRecipient);
+        
+        console.log("\nLow Risk Strategies (Tier 0) - Total: 100%");
+        console.log("  BTCStrategy (50%):", address(btcStrategy));
+        console.log("  ETHStrategy (30%):", address(ethStrategy));
         console.log("  BlueChipStrategy (20%):", address(blueChipStrategy));
-        console.log("\nMedium Risk Strategies:");
+        
+        console.log("\nMedium Risk Strategies (Tier 1) - Total: 100%");
         console.log("  DeFiLendingStrategy (60%):", address(defiLendingStrategy));
         console.log("  AltcoinStakingStrategy (40%):", address(altcoinStakingStrategy));
-        console.log("\nHigh Risk Strategies:");
+        
+        console.log("\nHigh Risk Strategies (Tier 2) - Total: 100%");
         console.log("  LeveragedYieldStrategy (70%):", address(leveragedYieldStrategy));
         console.log("  MemecoinFarmingStrategy (30%):", address(memecoinFarmingStrategy));
+        
         console.log("\nTest Users:");
-        console.log("  User1 (Conservative):", testUser1);
+        // console.log("  User1 (Conservative - 50/30/20):", testUser1);
 
+        console.log("\n====================================");
+        console.log("NEW FEATURES ENABLED:");
         console.log("====================================");
+        console.log("1. Dynamic Allocation Updates");
+        console.log("   - Use: vault.updateTierAllocations(tier, indices[], allocations[])");
+        console.log("   - Enforces: Allocations MUST sum to exactly 100%");
+        console.log("\n2. Auto-Rebalancing");
+        console.log("   - Per tier: vault.rebalanceTier(tier)");
+        console.log("   - All tiers: vault.rebalance()");
+        console.log("   - Moves existing funds to match target allocations");
+        console.log("\n3. Allocation Validation");
+        console.log("   - Check: vault.isTierAllocationValid(tier)");
+        console.log("   - Details: vault.getTierAllocationDetails(tier)");
+        console.log("====================================\n");
     }
 }
+
+
+
+
+

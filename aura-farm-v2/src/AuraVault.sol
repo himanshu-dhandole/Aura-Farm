@@ -27,25 +27,20 @@ interface IStrategy {
 }
 
 /**
- * @title AuraVault
- * @notice Main vault that integrates with Risk NFT and allocates deposits across strategies
- * @dev Users deposit USDT, get AURA tokens, funds are allocated based on their Risk NFT profile
+ * @title VaultStorage
+ * @notice Separate contract for storage to reduce main contract size
  */
-contract AuraVault is ERC20, Ownable, ReentrancyGuard {
-    using SafeERC20 for IERC20;
-
-    // ============ STRUCTS ============
-
+contract VaultStorage {
     struct StrategyAllocation {
         address strategy;
-        uint8 allocationPct; // Percentage allocation within the risk tier (0-100)
+        uint8 allocationPct;
         bool active;
     }
 
     struct RiskTier {
         string name;
         StrategyAllocation[] strategies;
-        uint256 totalAllocated; // Total USDT currently allocated to this tier
+        uint256 totalAllocated;
     }
 
     struct UserDeposit {
@@ -56,100 +51,103 @@ contract AuraVault is ERC20, Ownable, ReentrancyGuard {
         uint256 depositTimestamp;
     }
 
-    // ============ STATE VARIABLES ============
-
-    IERC20 public immutable depositToken; // vUSDT
+    IERC20 public immutable depositToken;
     IRiskNFT public immutable riskNFT;
-
-    // Risk tiers: 0 = Low, 1 = Medium, 2 = High
     RiskTier[3] public riskTiers;
-
-    // User tracking
     mapping(address => UserDeposit) public userDeposits;
-    
     uint256 public totalValueLocked;
     uint256 public totalHarvested;
     uint256 public lastHarvestTime;
-
-    // Performance fee
-    uint256 public performanceFeeBps = 1000; // 10%
+    uint256 public performanceFeeBps = 1000;
     address public feeRecipient;
 
-    // ============ EVENTS ============
-
-    event Deposited(
-        address indexed user,
-        uint256 amount,
-        uint256 auraTokensMinted,
-        uint256 lowRiskAlloc,
-        uint256 medRiskAlloc,
-        uint256 highRiskAlloc
-    );
-
-    event Withdrawn(
-        address indexed user,
-        uint256 auraTokensBurned,
-        uint256 amountReceived
-    );
-
-    event StrategyAdded(
-        uint8 indexed riskTier,
-        address indexed strategy,
-        uint8 allocationPct
-    );
-
-    event StrategyRemoved(
-        uint8 indexed riskTier,
-        uint256 indexed strategyIndex
-    );
-
-    event Harvested(
-        uint256 totalHarvested,
-        uint256 performanceFee,
-        uint256 timestamp
-    );
-
-    event Rebalanced(uint256 timestamp);
-
-    // ============ CONSTRUCTOR ============
-
-    constructor(
-        address _depositToken,
-        address _riskNFT,
-        address _feeRecipient
-    ) ERC20("Aura Vault Token", "AURA") Ownable(msg.sender) {
-        require(_depositToken != address(0), "Invalid deposit token");
-        require(_riskNFT != address(0), "Invalid risk NFT");
-        require(_feeRecipient != address(0), "Invalid fee recipient");
-
+    constructor(address _depositToken, address _riskNFT, address _feeRecipient) {
         depositToken = IERC20(_depositToken);
         riskNFT = IRiskNFT(_riskNFT);
         feeRecipient = _feeRecipient;
-
-        // Initialize risk tier names
         riskTiers[0].name = "Low Risk";
         riskTiers[1].name = "Medium Risk";
         riskTiers[2].name = "High Risk";
     }
+}
+
+/**
+ * @title VaultLogic
+ * @notice Library containing core vault logic to reduce contract size
+ */
+library VaultLogic {
+    using SafeERC20 for IERC20;
+
+    event Deposited(address indexed user, uint256 amount, uint256 auraTokensMinted, uint256 lowRiskAlloc, uint256 medRiskAlloc, uint256 highRiskAlloc);
+    event Withdrawn(address indexed user, uint256 auraTokensBurned, uint256 amountReceived);
+
+    function allocateToStrategies(
+        VaultStorage.StrategyAllocation[] storage strategies,
+        IERC20 depositToken,
+        uint256 amount
+    ) internal {
+        if (amount == 0) return;
+        
+        for (uint256 i = 0; i < strategies.length; i++) {
+            if (strategies[i].active) {
+                uint256 strategyAmount = (amount * strategies[i].allocationPct) / 100;
+                if (strategyAmount > 0) {
+                    depositToken.approve(strategies[i].strategy, strategyAmount);
+                    IStrategy(strategies[i].strategy).deposit(strategyAmount, address(this));
+                }
+            }
+        }
+    }
+
+    function withdrawFromStrategies(
+        VaultStorage.StrategyAllocation[] storage strategies,
+        uint256 amount
+    ) internal returns (uint256) {
+        if (amount == 0) return 0;
+
+        uint256 totalWithdrawn = 0;
+        for (uint256 i = 0; i < strategies.length; i++) {
+            if (strategies[i].active) {
+                uint256 strategyAmount = (amount * strategies[i].allocationPct) / 100;
+                if (strategyAmount > 0) {
+                    uint256 withdrawn = IStrategy(strategies[i].strategy).withdraw(
+                        strategyAmount, address(this), address(this)
+                    );
+                    totalWithdrawn += withdrawn;
+                }
+            }
+        }
+        return totalWithdrawn;
+    }
+}
+
+/**
+ * @title AuraVault
+ * @notice Main vault - significantly reduced size through modularization
+ */
+contract AuraVault is ERC20, VaultStorage, Ownable, ReentrancyGuard {
+    using SafeERC20 for IERC20;
+
+    event StrategyAdded(uint8 indexed riskTier, address indexed strategy, uint8 allocationPct);
+    event StrategyRemoved(uint8 indexed riskTier, uint256 indexed strategyIndex);
+    event Harvested(uint256 totalHarvested, uint256 performanceFee, uint256 timestamp);
+    event Rebalanced(uint256 timestamp);
+    event TierAllocationsUpdated(uint8 indexed riskTier, address[] strategies, uint8[] allocations);
+    event TierRebalanced(uint8 indexed riskTier, uint256 timestamp, uint256 totalRebalanced);
+
+    constructor(address _depositToken, address _riskNFT, address _feeRecipient) 
+        ERC20("Aura Vault Token", "AURA") 
+        VaultStorage(_depositToken, _riskNFT, _feeRecipient)
+        Ownable(msg.sender) 
+    {
+        require(_depositToken != address(0) && _riskNFT != address(0) && _feeRecipient != address(0), "Invalid addresses");
+    }
 
     // ============ STRATEGY MANAGEMENT ============
+    
+    function addStrategy(uint8 riskTier, address strategy, uint8 allocationPct) external onlyOwner {
+        require(riskTier < 3 && strategy != address(0) && allocationPct > 0 && allocationPct <= 100, "Invalid params");
 
-    /**
-     * @notice Add a strategy to a specific risk tier
-     * @param riskTier 0=Low, 1=Medium, 2=High
-     * @param strategy Address of the strategy contract
-     * @param allocationPct Percentage allocation within this tier (0-100)
-     */
-    function addStrategy(
-        uint8 riskTier,
-        address strategy,
-        uint8 allocationPct
-    ) external onlyOwner {
-        require(riskTier < 3, "Invalid risk tier");
-        require(strategy != address(0), "Invalid strategy");
-        require(allocationPct > 0 && allocationPct <= 100, "Invalid allocation");
-
-        // Check total allocation doesn't exceed 100%
         uint256 totalAlloc = allocationPct;
         for (uint256 i = 0; i < riskTiers[riskTier].strategies.length; i++) {
             if (riskTiers[riskTier].strategies[i].active) {
@@ -158,72 +156,60 @@ contract AuraVault is ERC20, Ownable, ReentrancyGuard {
         }
         require(totalAlloc <= 100, "Total allocation exceeds 100%");
 
-        riskTiers[riskTier].strategies.push(
-            StrategyAllocation({
-                strategy: strategy,
-                allocationPct: allocationPct,
-                active: true
-            })
-        );
+        riskTiers[riskTier].strategies.push(StrategyAllocation({
+            strategy: strategy,
+            allocationPct: allocationPct,
+            active: true
+        }));
 
         emit StrategyAdded(riskTier, strategy, allocationPct);
     }
 
-    /**
-     * @notice Remove a strategy from a risk tier
-     */
     function removeStrategy(uint8 riskTier, uint256 strategyIndex) external onlyOwner {
-        require(riskTier < 3, "Invalid risk tier");
-        require(strategyIndex < riskTiers[riskTier].strategies.length, "Invalid index");
-
+        require(riskTier < 3 && strategyIndex < riskTiers[riskTier].strategies.length, "Invalid params");
         riskTiers[riskTier].strategies[strategyIndex].active = false;
         riskTiers[riskTier].strategies[strategyIndex].allocationPct = 0;
-
         emit StrategyRemoved(riskTier, strategyIndex);
     }
 
-    /**
-     * @notice Update strategy allocation percentage
-     */
-    function updateStrategyAllocation(
-        uint8 riskTier,
-        uint256 strategyIndex,
-        uint8 newAllocationPct
-    ) external onlyOwner {
-        require(riskTier < 3, "Invalid risk tier");
-        require(strategyIndex < riskTiers[riskTier].strategies.length, "Invalid index");
-        require(newAllocationPct > 0 && newAllocationPct <= 100, "Invalid allocation");
+    function updateTierAllocations(uint8 riskTier, uint256[] calldata indices, uint8[] calldata allocations) external onlyOwner {
+        require(riskTier < 3 && indices.length == allocations.length && indices.length > 0, "Invalid params");
 
-        riskTiers[riskTier].strategies[strategyIndex].allocationPct = newAllocationPct;
+        uint256 totalAlloc = 0;
+        address[] memory strategies = new address[](indices.length);
+
+        for (uint256 i = 0; i < indices.length; i++) {
+            require(indices[i] < riskTiers[riskTier].strategies.length && 
+                    riskTiers[riskTier].strategies[indices[i]].active && 
+                    allocations[i] > 0, "Invalid strategy");
+            totalAlloc += allocations[i];
+            strategies[i] = riskTiers[riskTier].strategies[indices[i]].strategy;
+        }
+        require(totalAlloc == 100, "Must sum to 100%");
+
+        for (uint256 i = 0; i < indices.length; i++) {
+            riskTiers[riskTier].strategies[indices[i]].allocationPct = allocations[i];
+        }
+
+        emit TierAllocationsUpdated(riskTier, strategies, allocations);
     }
 
-    // ============ DEPOSIT FUNCTION ============
+    // ============ DEPOSIT & WITHDRAW ============
 
-    /**
-     * @notice Deposit USDT and receive AURA tokens
-     * @param amount Amount of USDT to deposit
-     */
     function deposit(uint256 amount) external nonReentrant {
-        require(amount > 0, "Amount must be > 0");
-        require(riskNFT.hasProfile(msg.sender), "No risk profile NFT");
+        require(amount > 0 && riskNFT.hasProfile(msg.sender), "Invalid deposit");
 
-        // Get user's risk profile
         IRiskNFT.RiskProfile memory profile = riskNFT.getRiskProfile(msg.sender);
-
-        // Transfer USDT from user
         depositToken.safeTransferFrom(msg.sender, address(this), amount);
 
-        // Calculate allocations based on risk profile
         uint256 lowRiskAmount = (amount * profile.lowPct) / 100;
         uint256 medRiskAmount = (amount * profile.medPct) / 100;
         uint256 highRiskAmount = (amount * profile.highPct) / 100;
 
-        // Allocate to strategies
-        _allocateToStrategies(0, lowRiskAmount);  // Low risk
-        _allocateToStrategies(1, medRiskAmount);  // Medium risk
-        _allocateToStrategies(2, highRiskAmount); // High risk
+        VaultLogic.allocateToStrategies(riskTiers[0].strategies, depositToken, lowRiskAmount);
+        VaultLogic.allocateToStrategies(riskTiers[1].strategies, depositToken, medRiskAmount);
+        VaultLogic.allocateToStrategies(riskTiers[2].strategies, depositToken, highRiskAmount);
 
-        // Update user deposit tracking
         UserDeposit storage userDep = userDeposits[msg.sender];
         userDep.totalDeposited += amount;
         userDep.lowRiskAmount += lowRiskAmount;
@@ -231,287 +217,243 @@ contract AuraVault is ERC20, Ownable, ReentrancyGuard {
         userDep.highRiskAmount += highRiskAmount;
         userDep.depositTimestamp = block.timestamp;
 
-        // Update tier tracking
         riskTiers[0].totalAllocated += lowRiskAmount;
         riskTiers[1].totalAllocated += medRiskAmount;
         riskTiers[2].totalAllocated += highRiskAmount;
-
         totalValueLocked += amount;
 
-        // Mint AURA tokens 1:1 with deposited USDT
         _mint(msg.sender, amount);
-
-        emit Deposited(
-            msg.sender,
-            amount,
-            amount,
-            lowRiskAmount,
-            medRiskAmount,
-            highRiskAmount
-        );
+        emit VaultLogic.Deposited(msg.sender, amount, amount, lowRiskAmount, medRiskAmount, highRiskAmount);
     }
 
-    /**
-     * @notice Internal function to allocate funds to strategies in a risk tier
-     * @param riskTier 0=Low, 1=Medium, 2=High
-     * @param amount Total amount to allocate to this tier
-     */
-    function _allocateToStrategies(uint8 riskTier, uint256 amount) internal {
-        if (amount == 0) return;
-
-        StrategyAllocation[] storage strategies = riskTiers[riskTier].strategies;
-        
-        for (uint256 i = 0; i < strategies.length; i++) {
-            if (strategies[i].active) {
-                uint256 strategyAmount = (amount * strategies[i].allocationPct) / 100;
-                
-                if (strategyAmount > 0) {
-                    // Approve and deposit to strategy
-                    depositToken.approve(strategies[i].strategy, strategyAmount);
-                    IStrategy(strategies[i].strategy).deposit(strategyAmount, address(this));
-                }
-            }
-        }
-    }
-
-    // ============ WITHDRAWAL FUNCTION ============
-
-    /**
-     * @notice Withdraw USDT by burning AURA tokens
-     * @param auraAmount Amount of AURA tokens to burn
-     */
     function withdraw(uint256 auraAmount) external nonReentrant {
-        require(auraAmount > 0, "Amount must be > 0");
-        require(balanceOf(msg.sender) >= auraAmount, "Insufficient AURA balance");
+        require(auraAmount > 0 && balanceOf(msg.sender) >= auraAmount, "Invalid withdrawal");
 
         UserDeposit storage userDep = userDeposits[msg.sender];
         require(userDep.totalDeposited > 0, "No deposits");
 
-        // Calculate proportional withdrawal from each risk tier
         uint256 totalUserDeposit = userDep.totalDeposited;
-        
         uint256 lowRiskWithdraw = (userDep.lowRiskAmount * auraAmount) / totalUserDeposit;
         uint256 medRiskWithdraw = (userDep.medRiskAmount * auraAmount) / totalUserDeposit;
         uint256 highRiskWithdraw = (userDep.highRiskAmount * auraAmount) / totalUserDeposit;
 
-        // Withdraw from strategies
-        uint256 totalWithdrawn = 0;
-        totalWithdrawn += _withdrawFromStrategies(0, lowRiskWithdraw);
-        totalWithdrawn += _withdrawFromStrategies(1, medRiskWithdraw);
-        totalWithdrawn += _withdrawFromStrategies(2, highRiskWithdraw);
+        uint256 totalWithdrawn = VaultLogic.withdrawFromStrategies(riskTiers[0].strategies, lowRiskWithdraw) +
+                                 VaultLogic.withdrawFromStrategies(riskTiers[1].strategies, medRiskWithdraw) +
+                                 VaultLogic.withdrawFromStrategies(riskTiers[2].strategies, highRiskWithdraw);
 
-        // Update user deposit tracking
         userDep.totalDeposited -= auraAmount;
         userDep.lowRiskAmount -= lowRiskWithdraw;
         userDep.medRiskAmount -= medRiskWithdraw;
         userDep.highRiskAmount -= highRiskWithdraw;
 
-        // Update tier tracking
         riskTiers[0].totalAllocated -= lowRiskWithdraw;
         riskTiers[1].totalAllocated -= medRiskWithdraw;
         riskTiers[2].totalAllocated -= highRiskWithdraw;
-
         totalValueLocked -= auraAmount;
 
-        // Burn AURA tokens
         _burn(msg.sender, auraAmount);
-
-        // Transfer USDT to user
         depositToken.safeTransfer(msg.sender, totalWithdrawn);
-
-        emit Withdrawn(msg.sender, auraAmount, totalWithdrawn);
-    }
-
-    /**
-     * @notice Internal function to withdraw from strategies in a risk tier
-     * @param riskTier 0=Low, 1=Medium, 2=High
-     * @param amount Total amount to withdraw from this tier
-     */
-    function _withdrawFromStrategies(uint8 riskTier, uint256 amount) internal returns (uint256) {
-        if (amount == 0) return 0;
-
-        StrategyAllocation[] storage strategies = riskTiers[riskTier].strategies;
-        uint256 totalWithdrawn = 0;
-        
-        for (uint256 i = 0; i < strategies.length; i++) {
-            if (strategies[i].active) {
-                uint256 strategyAmount = (amount * strategies[i].allocationPct) / 100;
-                
-                if (strategyAmount > 0) {
-                    uint256 withdrawn = IStrategy(strategies[i].strategy).withdraw(
-                        strategyAmount,
-                        address(this),
-                        address(this)
-                    );
-                    totalWithdrawn += withdrawn;
-                }
-            }
-        }
-        
-        return totalWithdrawn;
+        emit VaultLogic.Withdrawn(msg.sender, auraAmount, totalWithdrawn);
     }
 
     // ============ HARVEST & REBALANCE ============
 
-    /**
-     * @notice Harvest yields from all strategies
-     */
     function harvestAll() external nonReentrant onlyOwner returns (uint256) {
         uint256 totalHarvestedAmount = 0;
 
-        // Harvest from all risk tiers
         for (uint8 tier = 0; tier < 3; tier++) {
-            StrategyAllocation[] storage strategies = riskTiers[tier].strategies;
-            
-            for (uint256 i = 0; i < strategies.length; i++) {
-                if (strategies[i].active) {
-                    uint256 harvested = IStrategy(strategies[i].strategy).harvest();
-                    totalHarvestedAmount += harvested;
+            for (uint256 i = 0; i < riskTiers[tier].strategies.length; i++) {
+                if (riskTiers[tier].strategies[i].active) {
+                    totalHarvestedAmount += IStrategy(riskTiers[tier].strategies[i].strategy).harvest();
                 }
             }
         }
 
-        // Calculate performance fee
         uint256 performanceFee = (totalHarvestedAmount * performanceFeeBps) / 10000;
         uint256 netHarvest = totalHarvestedAmount - performanceFee;
 
-        if (performanceFee > 0) {
-            depositToken.safeTransfer(feeRecipient, performanceFee);
-        }
-
+        if (performanceFee > 0) depositToken.safeTransfer(feeRecipient, performanceFee);
+        
         totalHarvested += netHarvest;
         lastHarvestTime = block.timestamp;
-
         emit Harvested(totalHarvestedAmount, performanceFee, block.timestamp);
-
         return netHarvest;
     }
 
-    /**
-     * @notice Rebalance funds across strategies (can be expanded for dynamic rebalancing)
-     */
+    function rebalanceTier(uint8 tier) public nonReentrant onlyOwner {
+        require(tier < 3, "Invalid tier");
+        StrategyAllocation[] storage strategies = riskTiers[tier].strategies;
+        require(strategies.length > 0, "No strategies");
+
+        uint256 totalAllocation = 0;
+        uint256 activeCount = 0;
+        for (uint256 i = 0; i < strategies.length; i++) {
+            if (strategies[i].active) {
+                totalAllocation += strategies[i].allocationPct;
+                activeCount++;
+            }
+        }
+        require(totalAllocation == 100 && activeCount > 0, "Invalid allocations");
+
+        uint256 totalTierAssets = 0;
+        uint256[] memory currentAssets = new uint256[](strategies.length);
+        
+        for (uint256 i = 0; i < strategies.length; i++) {
+            if (strategies[i].active) {
+                currentAssets[i] = IStrategy(strategies[i].strategy).totalAssets();
+                totalTierAssets += currentAssets[i];
+            }
+        }
+
+        if (totalTierAssets == 0) {
+            emit TierRebalanced(tier, block.timestamp, 0);
+            return;
+        }
+
+        // Withdraw from overweight
+        for (uint256 i = 0; i < strategies.length; i++) {
+            if (strategies[i].active) {
+                uint256 targetAssets = (totalTierAssets * strategies[i].allocationPct) / 100;
+                if (currentAssets[i] > targetAssets) {
+                    IStrategy(strategies[i].strategy).withdraw(
+                        currentAssets[i] - targetAssets, address(this), address(this)
+                    );
+                }
+            }
+        }
+
+        // Deposit into underweight
+        for (uint256 i = 0; i < strategies.length; i++) {
+            if (strategies[i].active) {
+                uint256 targetAssets = (totalTierAssets * strategies[i].allocationPct) / 100;
+                if (targetAssets > currentAssets[i]) {
+                    uint256 deficitAmount = targetAssets - currentAssets[i];
+                    depositToken.approve(strategies[i].strategy, deficitAmount);
+                    IStrategy(strategies[i].strategy).deposit(deficitAmount, address(this));
+                }
+            }
+        }
+
+        emit TierRebalanced(tier, block.timestamp, totalTierAssets);
+    }
+
     function rebalance() external onlyOwner {
-        // This can be expanded to implement dynamic rebalancing logic
-        // For now, it's a placeholder that emits an event
+        for (uint8 tier = 0; tier < 3; tier++) {
+            if (riskTiers[tier].strategies.length > 0) rebalanceTier(tier);
+        }
         emit Rebalanced(block.timestamp);
     }
 
     // ============ VIEW FUNCTIONS ============
 
-    /**
-     * @notice Get total assets under management
-     */
     function totalAssets() external view returns (uint256) {
         uint256 total = 0;
-
         for (uint8 tier = 0; tier < 3; tier++) {
-            StrategyAllocation[] storage strategies = riskTiers[tier].strategies;
-            
-            for (uint256 i = 0; i < strategies.length; i++) {
-                if (strategies[i].active) {
-                    total += IStrategy(strategies[i].strategy).totalAssets();
+            for (uint256 i = 0; i < riskTiers[tier].strategies.length; i++) {
+                if (riskTiers[tier].strategies[i].active) {
+                    total += IStrategy(riskTiers[tier].strategies[i].strategy).totalAssets();
                 }
             }
         }
-
         return total;
     }
 
-    /**
-     * @notice Get user's current position value
-     */
     function getUserValue(address user) external view returns (uint256) {
-        // Simplified: returns AURA balance (1:1 with initial deposit)
-        // Can be enhanced to include proportional yield
         return balanceOf(user);
     }
 
-    /**
-     * @notice Get user's deposit details
-     */
     function getUserDeposit(address user) external view returns (UserDeposit memory) {
         return userDeposits[user];
     }
 
-    /**
-     * @notice Get all strategies in a risk tier
-     */
     function getRiskTierStrategies(uint8 riskTier) external view returns (StrategyAllocation[] memory) {
-        require(riskTier < 3, "Invalid risk tier");
+        require(riskTier < 3, "Invalid tier");
         return riskTiers[riskTier].strategies;
     }
 
-    /**
-     * @notice Get risk tier information
-     */
-    function getRiskTierInfo(uint8 riskTier) external view returns (
-        string memory name,
-        uint256 totalAllocated,
-        uint256 strategyCount
-    ) {
-        require(riskTier < 3, "Invalid risk tier");
-        return (
-            riskTiers[riskTier].name,
-            riskTiers[riskTier].totalAllocated,
-            riskTiers[riskTier].strategies.length
-        );
+    function getRiskTierInfo(uint8 riskTier) external view returns (string memory name, uint256 totalAllocated, uint256 strategyCount) {
+        require(riskTier < 3, "Invalid tier");
+        return (riskTiers[riskTier].name, riskTiers[riskTier].totalAllocated, riskTiers[riskTier].strategies.length);
     }
 
-    /**
-     * @notice Get estimated vault APY (weighted average across all strategies)
-     */
     function estimatedVaultAPY() external view returns (uint256) {
         uint256 totalWeightedAPY = 0;
         uint256 totalAssetValue = 0;
 
         for (uint8 tier = 0; tier < 3; tier++) {
-            StrategyAllocation[] storage strategies = riskTiers[tier].strategies;
-            
-            for (uint256 i = 0; i < strategies.length; i++) {
-                if (strategies[i].active) {
-                    uint256 strategyAssets = IStrategy(strategies[i].strategy).totalAssets();
-                    uint256 strategyAPY = IStrategy(strategies[i].strategy).estimatedAPY();
-                    
-                    totalWeightedAPY += strategyAssets * strategyAPY;
+            for (uint256 i = 0; i < riskTiers[tier].strategies.length; i++) {
+                if (riskTiers[tier].strategies[i].active) {
+                    uint256 strategyAssets = IStrategy(riskTiers[tier].strategies[i].strategy).totalAssets();
+                    totalWeightedAPY += strategyAssets * IStrategy(riskTiers[tier].strategies[i].strategy).estimatedAPY();
                     totalAssetValue += strategyAssets;
                 }
             }
         }
+        return totalAssetValue == 0 ? 0 : totalWeightedAPY / totalAssetValue;
+    }
 
-        if (totalAssetValue == 0) return 0;
-        return totalWeightedAPY / totalAssetValue;
+    function isTierAllocationValid(uint8 riskTier) external view returns (bool isValid, uint256 totalAllocation) {
+        require(riskTier < 3, "Invalid tier");
+        for (uint256 i = 0; i < riskTiers[riskTier].strategies.length; i++) {
+            if (riskTiers[riskTier].strategies[i].active) {
+                totalAllocation += riskTiers[riskTier].strategies[i].allocationPct;
+            }
+        }
+        isValid = (totalAllocation == 100);
+    }
+
+    function getTierAllocationDetails(uint8 riskTier) external view returns (
+        address[] memory strategyAddresses,
+        uint8[] memory allocations,
+        uint256[] memory currentAssets,
+        uint256[] memory targetAssets
+    ) {
+        require(riskTier < 3, "Invalid tier");
+        
+        uint256 activeCount = 0;
+        for (uint256 i = 0; i < riskTiers[riskTier].strategies.length; i++) {
+            if (riskTiers[riskTier].strategies[i].active) activeCount++;
+        }
+        
+        strategyAddresses = new address[](activeCount);
+        allocations = new uint8[](activeCount);
+        currentAssets = new uint256[](activeCount);
+        targetAssets = new uint256[](activeCount);
+        
+        uint256 totalTierAssets = 0;
+        uint256 index = 0;
+        
+        for (uint256 i = 0; i < riskTiers[riskTier].strategies.length; i++) {
+            if (riskTiers[riskTier].strategies[i].active) {
+                strategyAddresses[index] = riskTiers[riskTier].strategies[i].strategy;
+                allocations[index] = riskTiers[riskTier].strategies[i].allocationPct;
+                currentAssets[index] = IStrategy(riskTiers[riskTier].strategies[i].strategy).totalAssets();
+                totalTierAssets += currentAssets[index];
+                index++;
+            }
+        }
+        
+        for (uint256 i = 0; i < activeCount; i++) {
+            if (totalTierAssets > 0) {
+                targetAssets[i] = (totalTierAssets * allocations[i]) / 100;
+            }
+        }
     }
 
     // ============ ADMIN FUNCTIONS ============
 
-    /**
-     * @notice Set performance fee
-     */
     function setPerformanceFee(uint256 _feeBps) external onlyOwner {
-        require(_feeBps <= 2000, "Fee too high"); // Max 20%
+        require(_feeBps <= 2000, "Fee too high");
         performanceFeeBps = _feeBps;
     }
 
-    /**
-     * @notice Set fee recipient
-     */
     function setFeeRecipient(address _feeRecipient) external onlyOwner {
         require(_feeRecipient != address(0), "Invalid address");
         feeRecipient = _feeRecipient;
     }
 
-    /**
-     * @notice Emergency withdrawal from a specific strategy
-     */
-    function emergencyWithdrawStrategy(uint8 riskTier, uint256 strategyIndex) 
-        external 
-        onlyOwner 
-        nonReentrant 
-    {
-        require(riskTier < 3, "Invalid risk tier");
-        require(strategyIndex < riskTiers[riskTier].strategies.length, "Invalid index");
-        
-        address strategy = riskTiers[riskTier].strategies[strategyIndex].strategy;
-        IStrategy(strategy).withdrawAll();
+    function emergencyWithdrawStrategy(uint8 riskTier, uint256 strategyIndex) external onlyOwner nonReentrant {
+        require(riskTier < 3 && strategyIndex < riskTiers[riskTier].strategies.length, "Invalid params");
+        IStrategy(riskTiers[riskTier].strategies[strategyIndex].strategy).withdrawAll();
     }
 }

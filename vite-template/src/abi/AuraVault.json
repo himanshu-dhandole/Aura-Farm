@@ -318,6 +318,56 @@
 		"inputs": [
 			{
 				"indexed": true,
+				"internalType": "uint8",
+				"name": "riskTier",
+				"type": "uint8"
+			},
+			{
+				"indexed": false,
+				"internalType": "address[]",
+				"name": "strategies",
+				"type": "address[]"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint8[]",
+				"name": "allocations",
+				"type": "uint8[]"
+			}
+		],
+		"name": "TierAllocationsUpdated",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "uint8",
+				"name": "riskTier",
+				"type": "uint8"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "timestamp",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "totalRebalanced",
+				"type": "uint256"
+			}
+		],
+		"name": "TierRebalanced",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
 				"internalType": "address",
 				"name": "from",
 				"type": "address"
@@ -593,9 +643,43 @@
 						"type": "bool"
 					}
 				],
-				"internalType": "struct AuraVault.StrategyAllocation[]",
+				"internalType": "struct VaultStorage.StrategyAllocation[]",
 				"name": "",
 				"type": "tuple[]"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint8",
+				"name": "riskTier",
+				"type": "uint8"
+			}
+		],
+		"name": "getTierAllocationDetails",
+		"outputs": [
+			{
+				"internalType": "address[]",
+				"name": "strategyAddresses",
+				"type": "address[]"
+			},
+			{
+				"internalType": "uint8[]",
+				"name": "allocations",
+				"type": "uint8[]"
+			},
+			{
+				"internalType": "uint256[]",
+				"name": "currentAssets",
+				"type": "uint256[]"
+			},
+			{
+				"internalType": "uint256[]",
+				"name": "targetAssets",
+				"type": "uint256[]"
 			}
 		],
 		"stateMutability": "view",
@@ -639,7 +723,7 @@
 						"type": "uint256"
 					}
 				],
-				"internalType": "struct AuraVault.UserDeposit",
+				"internalType": "struct VaultStorage.UserDeposit",
 				"name": "",
 				"type": "tuple"
 			}
@@ -677,6 +761,30 @@
 			}
 		],
 		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint8",
+				"name": "riskTier",
+				"type": "uint8"
+			}
+		],
+		"name": "isTierAllocationValid",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "isValid",
+				"type": "bool"
+			},
+			{
+				"internalType": "uint256",
+				"name": "totalAllocation",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
 		"type": "function"
 	},
 	{
@@ -734,6 +842,19 @@
 	{
 		"inputs": [],
 		"name": "rebalance",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint8",
+				"name": "tier",
+				"type": "uint8"
+			}
+		],
+		"name": "rebalanceTier",
 		"outputs": [],
 		"stateMutability": "nonpayable",
 		"type": "function"
@@ -965,17 +1086,17 @@
 				"type": "uint8"
 			},
 			{
-				"internalType": "uint256",
-				"name": "strategyIndex",
-				"type": "uint256"
+				"internalType": "uint256[]",
+				"name": "indices",
+				"type": "uint256[]"
 			},
 			{
-				"internalType": "uint8",
-				"name": "newAllocationPct",
-				"type": "uint8"
+				"internalType": "uint8[]",
+				"name": "allocations",
+				"type": "uint8[]"
 			}
 		],
-		"name": "updateStrategyAllocation",
+		"name": "updateTierAllocations",
 		"outputs": [],
 		"stateMutability": "nonpayable",
 		"type": "function"
