@@ -245,79 +245,58 @@ class KeeperService {
     // ============================================
     // Fetch Previous APYs from MongoDB
     // ============================================
-    
+
     async fetchPreviousAPYs(allStrategies, days = 7) {
         console.log(`📈 Fetching previous ${days}-day APYs from MongoDB...\n`);
-        
         try {
             const collection = this.db.collection('strategy_performance');
             const cutoffDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-            
+
             const previousAPYs = {
                 byTier: {},
                 byAddress: {}
             };
-            
+
             for (let tier = 0; tier < 3; tier++) {
                 previousAPYs.byTier[tier] = [];
-                
                 const tierData = allStrategies.tiers[tier];
                 if (!tierData || !tierData.strategies) continue;
-                
-                console.log(`Tier ${tier} (${tierData.name}):`);
-                
+
                 for (const strat of tierData.strategies) {
+                    // Fetch last 7 days, sorted by timestamp descending
                     const results = await collection.find({
                         strategyAddress: strat.address,
                         timestamp: { $gte: cutoffDate }
-                    }).toArray();
-                    
-                    if (results.length > 0) {
-                        const apys = results.map(r => r.apy);
-                        const avgAPY = apys.reduce((sum, apy) => sum + apy, 0) / apys.length;
-                        const volatility = this.calculateVolatility(apys);
-                        const sharpe = this.calculateSharpe(apys);
-                        
-                        const strategyData = {
-                            address: strat.address,
-                            index: strat.index,
-                            name: allStrategies.strategyMap.get(strat.address)?.name || `Strategy_${strat.index}`,
-                            avg: avgAPY,
-                            volatility: volatility,
-                            sharpe: sharpe,
-                            dataPoints: results.length
-                        };
-                        
-                        previousAPYs.byTier[tier].push(strategyData);
-                        previousAPYs.byAddress[strat.address] = strategyData;
-                        
-                        console.log(`  [${strat.index}] ${strategyData.name}`);
-                        console.log(`      Avg APY: ${avgAPY.toFixed(2)}%`);
-                        console.log(`      Volatility: ${volatility.toFixed(2)}%`);
-                        console.log(`      Sharpe: ${sharpe.toFixed(2)}`);
-                        console.log(`      Data Points: ${results.length}`);
-                    } else {
-                        console.log(`  [${strat.index}] ${strat.address.slice(0, 10)}... - No historical data`);
-                        
-                        previousAPYs.byTier[tier].push({
-                            address: strat.address,
-                            index: strat.index,
-                            avg: 0,
-                            volatility: 0,
-                            sharpe: 0,
-                            dataPoints: 0
-                        });
-                    }
+                    }).sort({ timestamp: -1 }).limit(days).toArray();
+
+                    // Sort ascending by timestamp for chronological order
+                    results.sort((a, b) => a.timestamp - b.timestamp);
+
+                    const apys = results.map(r => r.apy);
+                    const avgAPY = apys.length ? apys.reduce((sum, apy) => sum + apy, 0) / apys.length : 0;
+                    const volatility = this.calculateVolatility(apys);
+                    const sharpe = this.calculateSharpe(apys);
+
+                    const strategyData = {
+                        address: strat.address,
+                        index: strat.index,
+                        name: allStrategies.strategyMap.get(strat.address)?.name || `Strategy_${strat.index}`,
+                        avg: apys,   // <-- 7-day APY array
+                        volatility: volatility,
+                        sharpe: sharpe,
+                        dataPoints: results.length,
+                        apyHistory: avgAPY 
+                    };
+
+                    previousAPYs.byTier[tier].push(strategyData);
+                    previousAPYs.byAddress[strat.address] = strategyData;
                 }
-                console.log('');
             }
-            
+
             return previousAPYs;
-            
+
         } catch (error) {
             console.error('❌ Error fetching previous APYs from MongoDB:', error.message);
-            
-            // Return empty structure on error
             const emptyAPYs = { byTier: {}, byAddress: {} };
             for (let tier = 0; tier < 3; tier++) {
                 emptyAPYs.byTier[tier] = [];
@@ -354,7 +333,6 @@ class KeeperService {
     
     async getAIAllocations(currentAPYs, previousAPYs, allStrategies) {
         console.log('🤖 Requesting allocations from AI...\n');
-        
         try {
             const aiRequestData = {
                 requestType: 'rebalance',
@@ -376,7 +354,9 @@ class KeeperService {
                         currentAllocation: curr.allocationPct,
                         totalAssets: curr.totalAssets,
                         historical: {
-                            avgAPY: prev.avg || 0,
+                            avgAPY: Array.isArray(prev.avg)
+                                ? (prev.avg.length ? prev.avg.reduce((a, b) => a + b, 0) / prev.avg.length : 0)
+                                : prev.avg || 0,
                             volatility: prev.volatility || 0,
                             sharpe: prev.sharpe || 0
                         }
@@ -388,73 +368,36 @@ class KeeperService {
                     strategies: strategies
                 });
             }
+            // Wrap in base_apy as required by the API
+            const payload = { base_apy: aiRequestData };
+
             console.log('📤 Sending to AI:');
-            console.log(JSON.stringify(aiRequestData, null, 2));
+            console.log(JSON.stringify(payload, null, 2));
             console.log('');
-            try {
-                const aiResponse = await axios.post(AI_API_URL, aiRequestData, {
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${process.env.AI_API_KEY}`
-                    },
-                    timeout: 30000
-                });
-                const allocations = aiResponse.data;
-                console.log('✅ AI Allocations Received:');
-                if (allocations.confidence !== undefined) {
-                    console.log(`   Confidence: ${(allocations.confidence * 100).toFixed(1)}%\n`);
-                }
-                for (let tier = 0; tier < 3; tier++) {
-                    if (allocations.tiers[tier]) {
-                        console.log(`   Tier ${tier} (${allocations.tiers[tier].name}):`);
-                        for (const strat of allocations.tiers[tier].strategies) {
-                            console.log(`     [${strat.index}] ${strat.name}: ${strat.newAllocation}%`);
-                        }
-                        console.log('');
-                    }
-                }
-                return allocations;
-            } catch (error) {
-                console.error('❌ Error getting AI allocations:', error.message);
-                console.log('⚠️  Using mock allocations for testing.');
-                // Fallback: assign custom static allocations for each tier for testing
-                const staticAllocations = [
-                    [50, 30, 20], // Tier 0: 3 strategies
-                    [60, 40],     // Tier 1: 2 strategies
-                    [70, 30]      // Tier 2: 2 strategies
-                ];
-                const mockAllocations = {
-                    confidence: 1.0,
-                    tiers: []
-                };
-                for (let tier = 0; tier < 3; tier++) {
-                    const tierData = aiRequestData.tiers[tier];
-                    if (!tierData || !tierData.strategies.length) {
-                        mockAllocations.tiers[tier] = { name: tierData ? tierData.name : '', strategies: [] };
-                        continue;
-                    }
-                    mockAllocations.tiers[tier] = {
-                        name: tierData.name,
-                        strategies: tierData.strategies.map((s, i) => ({
-                            ...s,
-                            newAllocation: staticAllocations[tier][i] !== undefined ? staticAllocations[tier][i] : 0
-                        }))
-                    };
-                }
-                for (let tier = 0; tier < 3; tier++) {
-                    if (mockAllocations.tiers[tier]) {
-                        console.log(`   Tier ${tier} (${mockAllocations.tiers[tier].name}):`);
-                        for (const strat of mockAllocations.tiers[tier].strategies) {
-                            console.log(`     [${strat.index}] ${strat.name}: ${strat.newAllocation}%`);
-                        }
-                        console.log('');
-                    }
-                }
-                return mockAllocations;
+            const aiResponse = await axios.post(AI_API_URL, payload, {
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                timeout: 30000
+            });
+            const allocations = aiResponse.data;
+            console.log('✅ AI Allocations Received:');
+            if (allocations.confidence !== undefined) {
+                console.log(`   Confidence: ${(allocations.confidence * 100).toFixed(1)}%\n`);
             }
-        } catch (outerError) {
-            console.error('❌ Unexpected error in getAIAllocations:', outerError.message);
-            throw outerError;
+            for (let tier = 0; tier < (allocations.tiers?.length || 0); tier++) {
+                if (allocations.tiers[tier]) {
+                    console.log(`   Tier ${tier} (${allocations.tiers[tier].name}):`);
+                    for (const strat of allocations.tiers[tier].strategies) {
+                        console.log(`     [${strat.index}] ${strat.name}: ${strat.newAllocation}%`);
+                    }
+                    console.log('');
+                }
+            }
+            return allocations;
+        } catch (error) {
+            console.error('❌ Error getting AI allocations:', error.message);
+            throw error;
         }
     }
     
@@ -579,25 +522,26 @@ class KeeperService {
             
             // Step 4: Get AI allocations
             const aiAllocations = await this.getAIAllocations(currentAPYs, previousAPYs, allStrategies);
-            
-            // Step 5: Update and rebalance each tier
-            for (let tier = 0; tier < 3; tier++) {
-                console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-                console.log(`TIER ${tier}: ${allStrategies.tiers[tier].name.toUpperCase()}`);
-                console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-                
-                if (!aiAllocations.tiers[tier] || !aiAllocations.tiers[tier].strategies) {
+
+            // Step 5: Update and rebalance each tier using AI response
+            for (let tier = 0; tier < aiAllocations.tiers.length; tier++) {
+                const tierData = aiAllocations.tiers[tier];
+                if (!tierData || !tierData.strategies || tierData.strategies.length === 0) {
                     console.log(`   ⚠️  No AI allocations for tier ${tier}, skipping...\n`);
                     continue;
                 }
-                
-                const tierStrategies = aiAllocations.tiers[tier].strategies;
-                const indices = tierStrategies.map(s => s.index);
-                const allocations = tierStrategies.map(s => s.newAllocation);
-                
+
+                console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+                console.log(`TIER ${tier}: ${tierData.name.toUpperCase()}`);
+                console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+
+                // Get indices and new allocations from AI response, convert to integers
+                const indices = tierData.strategies.map(s => s.index);
+                const allocations = tierData.strategies.map(s => Math.round(s.newAllocation)); // <-- fix here
+
                 // Update tier allocations
                 await this.updateTierAllocations(tier, indices, allocations);
-                
+
                 // Rebalance tier
                 await this.rebalanceTier(tier);
             }
