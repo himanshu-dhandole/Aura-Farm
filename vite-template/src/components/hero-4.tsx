@@ -27,8 +27,7 @@ const wallets = [
   createWallet("io.zerion.wallet"),
 ];
 
-export interface HeroSectionProps
-  extends React.HTMLAttributes<HTMLDivElement> {
+export interface HeroSectionProps extends React.HTMLAttributes<HTMLDivElement> {
   title: React.ReactNode;
   animatedTexts: string[];
   subtitle: string;
@@ -54,7 +53,7 @@ const HeroSection = React.forwardRef<HTMLDivElement, HeroSectionProps>(
       avatars,
       ...props
     },
-    ref,
+    ref
   ) => {
     const { theme } = useTheme();
     const isDark = theme === "dark";
@@ -99,13 +98,14 @@ const HeroSection = React.forwardRef<HTMLDivElement, HeroSectionProps>(
     React.useEffect(() => {
       const fullText = animatedTexts[textIndex];
 
-      const interval = setInterval(() => {
-        setDisplayText((prev) =>
-          isDeleting
-            ? prev.slice(0, -1)
-            : fullText.slice(0, prev.length + 1),
-        );
-      }, isDeleting ? 60 : 120);
+      const interval = setInterval(
+        () => {
+          setDisplayText((prev) =>
+            isDeleting ? prev.slice(0, -1) : fullText.slice(0, prev.length + 1)
+          );
+        },
+        isDeleting ? 60 : 120
+      );
 
       if (!isDeleting && displayText === fullText) {
         setTimeout(() => setIsDeleting(true), 1500);
@@ -170,7 +170,7 @@ const HeroSection = React.forwardRef<HTMLDivElement, HeroSectionProps>(
       const timeoutId = setTimeout(() => {
         const checkAndHandle = async () => {
           const profileExists = await checkProfile();
-          
+
           // Only show modal if user is still connected and definitively has no profile
           if (isConnected && address && profileExists === false) {
             setShowMintModal(true);
@@ -181,7 +181,7 @@ const HeroSection = React.forwardRef<HTMLDivElement, HeroSectionProps>(
               description: "Visit the Vault to manage your assets",
               action: {
                 label: "Go to Vault",
-                onClick: () => window.location.href = "/vault",
+                onClick: () => (window.location.href = "/vault"),
               },
             });
           }
@@ -236,24 +236,24 @@ const HeroSection = React.forwardRef<HTMLDivElement, HeroSectionProps>(
         await waitForTransactionReceipt(config, { hash });
 
         setMintSuccess(true);
-        
+
         // Show success toast
         toast.success("NFT Minted Successfully!", {
           description: "Your risk profile has been created",
         });
-        
+
         // Wait a moment to show success, then close modal and update profile
         setTimeout(async () => {
           setShowMintModal(false);
           await checkProfile();
-          
+
           // Show vault toast after profile is updated
           setTimeout(() => {
             toast.success("Ready to explore!", {
               description: "Visit the Vault to manage your assets",
               action: {
                 label: "Go to Vault",
-                onClick: () => window.location.href = "/vault",
+                onClick: () => (window.location.href = "/vault"),
               },
               duration: 5000,
             });
@@ -265,7 +265,7 @@ const HeroSection = React.forwardRef<HTMLDivElement, HeroSectionProps>(
           err?.shortMessage ||
           err?.message?.split("\n")[0] ||
           "Transaction failed. Please try again.";
-        
+
         setError(errorMessage);
         toast.error("Minting Failed", {
           description: errorMessage,
@@ -288,14 +288,16 @@ const HeroSection = React.forwardRef<HTMLDivElement, HeroSectionProps>(
           {...props}
           className={cn(
             "relative container mx-auto flex flex-col items-center justify-center py-24 px-4 text-center overflow-hidden min-h-[calc(100vh-4rem)]",
-            className,
+            className
           )}
         >
           {/* Background gradient effects */}
           <div className="absolute inset-0 -z-10 overflow-hidden pointer-events-none">
             <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/20 rounded-full blur-3xl animate-pulse" />
-            <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-pulse" 
-                 style={{ animationDelay: '1s' }} />
+            <div
+              className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-pulse"
+              style={{ animationDelay: "1s" }}
+            />
           </div>
 
           {/* Info badge */}
@@ -335,7 +337,8 @@ const HeroSection = React.forwardRef<HTMLDivElement, HeroSectionProps>(
                   theme={isDark ? "dark" : "light"}
                   connectButton={{
                     label: "Connect Wallet",
-                    className: "!px-8 !py-6 !text-lg !font-semibold !rounded-xl !shadow-lg hover:!shadow-xl transition-all",
+                    className:
+                      "!px-8 !py-6 !text-lg !font-semibold !rounded-xl !shadow-lg hover:!shadow-xl transition-all",
                   }}
                   connectModal={{
                     title: "Select a Wallet",
@@ -368,175 +371,175 @@ const HeroSection = React.forwardRef<HTMLDivElement, HeroSectionProps>(
         </section>
 
         {/* Mint Modal - 🔒 EXTRA SAFETY: Multiple guards to prevent flash */}
-        {showMintModal && 
-          hasHydrated && 
-          isConnected && 
-          address && 
+        {showMintModal &&
+          hasHydrated &&
+          isConnected &&
+          address &&
           hasProfile === false && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="w-full max-w-lg rounded-2xl bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 p-6 sm:p-8 text-white shadow-2xl animate-in zoom-in-95 duration-300">
-              {/* Header */}
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-primary/20">
-                    <Sparkles className="h-5 w-5 text-primary" />
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+              <div className="w-full max-w-lg rounded-2xl bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 p-6 sm:p-8 text-white shadow-2xl animate-in zoom-in-95 duration-300">
+                {/* Header */}
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-primary/20">
+                      <Sparkles className="h-5 w-5 text-primary" />
+                    </div>
+                    <h2 className="text-2xl font-bold">Create Risk Profile</h2>
                   </div>
-                  <h2 className="text-2xl font-bold">Create Risk Profile</h2>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setShowMintModal(false)}
+                    className="hover:bg-zinc-800 rounded-full"
+                    disabled={isMinting}
+                  >
+                    <X className="h-5 w-5" />
+                  </Button>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setShowMintModal(false)}
-                  className="hover:bg-zinc-800 rounded-full"
-                  disabled={isMinting}
-                >
-                  <X className="h-5 w-5" />
-                </Button>
-              </div>
 
-              {!mintSuccess ? (
-                <>
-                  {/* Instructions */}
-                  <p className="text-sm text-zinc-400 mb-6">
-                    Allocate your risk tolerance across three categories. Total
-                    must equal 100%.
-                  </p>
+                {!mintSuccess ? (
+                  <>
+                    {/* Instructions */}
+                    <p className="text-sm text-zinc-400 mb-6">
+                      Allocate your risk tolerance across three categories.
+                      Total must equal 100%.
+                    </p>
 
-                  {/* Allocation Inputs */}
-                  <div className="space-y-5 mb-6">
-                    {(["low", "med", "high"] as const).map((k) => (
-                      <div key={k} className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <label className="text-sm font-medium text-zinc-300">
-                            {riskLabels[k]}
-                          </label>
-                          <span className="text-sm font-semibold text-white">
-                            {allocations[k]}%
-                          </span>
-                        </div>
-                        {/* Slider */}
-                        <input
-                          type="range"
-                          min="0"
-                          max="100"
-                          value={allocations[k]}
-                          onChange={(e) =>
-                            handleSliderChange(k, Number(e.target.value))
-                          }
-                          disabled={isMinting}
-                          className={cn(
-                            "w-full h-2 rounded-lg appearance-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-50",
-                            "bg-zinc-800",
-                          )}
-                          style={{
-                            background: `linear-gradient(to right, 
+                    {/* Allocation Inputs */}
+                    <div className="space-y-5 mb-6">
+                      {(["low", "med", "high"] as const).map((k) => (
+                        <div key={k} className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="text-sm font-medium text-zinc-300">
+                              {riskLabels[k]}
+                            </label>
+                            <span className="text-sm font-semibold text-white">
+                              {allocations[k]}%
+                            </span>
+                          </div>
+                          {/* Slider */}
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            value={allocations[k]}
+                            onChange={(e) =>
+                              handleSliderChange(k, Number(e.target.value))
+                            }
+                            disabled={isMinting}
+                            className={cn(
+                              "w-full h-2 rounded-lg appearance-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-50",
+                              "bg-zinc-800"
+                            )}
+                            style={{
+                              background: `linear-gradient(to right, 
                               ${k === "low" ? "#10b981" : k === "med" ? "#f59e0b" : "#ef4444"} 0%, 
                               ${k === "low" ? "#10b981" : k === "med" ? "#f59e0b" : "#ef4444"} ${allocations[k]}%, 
                               #27272a ${allocations[k]}%, 
                               #27272a 100%)`,
-                          }}
-                        />
-                        {/* Number input */}
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          value={allocations[k]}
-                          onChange={(e) =>
-                            handleChange(k, Number(e.target.value))
-                          }
-                          disabled={isMinting}
-                          className="w-full rounded-lg bg-zinc-800 border border-zinc-700 p-3 text-white focus:outline-none focus:ring-2 focus:ring-primary transition-all disabled:cursor-not-allowed disabled:opacity-50"
-                        />
-                      </div>
-                    ))}
-                  </div>
+                            }}
+                          />
+                          {/* Number input */}
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={allocations[k]}
+                            onChange={(e) =>
+                              handleChange(k, Number(e.target.value))
+                            }
+                            disabled={isMinting}
+                            className="w-full rounded-lg bg-zinc-800 border border-zinc-700 p-3 text-white focus:outline-none focus:ring-2 focus:ring-primary transition-all disabled:cursor-not-allowed disabled:opacity-50"
+                          />
+                        </div>
+                      ))}
+                    </div>
 
-                  {/* Total Display */}
-                  <div className="flex items-center justify-between p-4 rounded-lg bg-zinc-800/50 border border-zinc-700 mb-6">
-                    <span className="text-sm font-medium text-zinc-300">
-                      Total Allocation
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={cn(
-                          "text-xl font-bold",
-                          isValid ? "text-green-400" : "text-red-400",
-                        )}
-                      >
-                        {total}%
+                    {/* Total Display */}
+                    <div className="flex items-center justify-between p-4 rounded-lg bg-zinc-800/50 border border-zinc-700 mb-6">
+                      <span className="text-sm font-medium text-zinc-300">
+                        Total Allocation
                       </span>
-                      {isValid ? (
-                        <CheckCircle2 className="h-5 w-5 text-green-400" />
-                      ) : (
-                        <AlertCircle className="h-5 w-5 text-red-400" />
-                      )}
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={cn(
+                            "text-xl font-bold",
+                            isValid ? "text-green-400" : "text-red-400"
+                          )}
+                        >
+                          {total}%
+                        </span>
+                        {isValid ? (
+                          <CheckCircle2 className="h-5 w-5 text-green-400" />
+                        ) : (
+                          <AlertCircle className="h-5 w-5 text-red-400" />
+                        )}
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Validation Message */}
-                  {!isValid && (
-                    <div className="flex items-start gap-2 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 mb-4">
-                      <AlertCircle className="h-4 w-4 text-yellow-400 flex-shrink-0 mt-0.5" />
-                      <p className="text-xs text-yellow-400">
-                        Total allocation must equal 100%
-                      </p>
+                    {/* Validation Message */}
+                    {!isValid && (
+                      <div className="flex items-start gap-2 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 mb-4">
+                        <AlertCircle className="h-4 w-4 text-yellow-400 flex-shrink-0 mt-0.5" />
+                        <p className="text-xs text-yellow-400">
+                          Total allocation must equal 100%
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Error Message */}
+                    {error && (
+                      <div className="flex items-start gap-2 p-4 rounded-lg bg-red-500/10 border border-red-500/20 mb-6">
+                        <AlertCircle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
+                        <p className="text-sm text-red-400">{error}</p>
+                      </div>
+                    )}
+
+                    {/* Action Buttons */}
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowMintModal(false)}
+                        disabled={isMinting}
+                        className="flex-1 border-zinc-700 hover:bg-zinc-800"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        disabled={!isValid || isMinting}
+                        onClick={handleMintNFT}
+                        className="flex-1 bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-600/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isMinting ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Minting...
+                          </>
+                        ) : (
+                          "Mint NFT Profile"
+                        )}
+                      </Button>
                     </div>
-                  )}
-
-                  {/* Error Message */}
-                  {error && (
-                    <div className="flex items-start gap-2 p-4 rounded-lg bg-red-500/10 border border-red-500/20 mb-6">
-                      <AlertCircle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
-                      <p className="text-sm text-red-400">{error}</p>
+                  </>
+                ) : (
+                  /* Success State */
+                  <div className="text-center py-8">
+                    <div className="mb-4 inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-500/20 animate-in zoom-in duration-300">
+                      <CheckCircle2 className="h-8 w-8 text-green-400" />
                     </div>
-                  )}
-
-                  {/* Action Buttons */}
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <Button
-                      variant="outline"
-                      onClick={() => setShowMintModal(false)}
-                      disabled={isMinting}
-                      className="flex-1 border-zinc-700 hover:bg-zinc-800"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      disabled={!isValid || isMinting}
-                      onClick={handleMintNFT}
-                      className="flex-1 bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-600/90 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isMinting ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Minting...
-                        </>
-                      ) : (
-                        "Mint NFT Profile"
-                      )}
-                    </Button>
+                    <h3 className="text-xl font-bold mb-2">Profile Created!</h3>
+                    <p className="text-zinc-400">
+                      Your risk profile NFT has been minted successfully.
+                    </p>
                   </div>
-                </>
-              ) : (
-                /* Success State */
-                <div className="text-center py-8">
-                  <div className="mb-4 inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-500/20 animate-in zoom-in duration-300">
-                    <CheckCircle2 className="h-8 w-8 text-green-400" />
-                  </div>
-                  <h3 className="text-xl font-bold mb-2">Profile Created!</h3>
-                  <p className="text-zinc-400">
-                    Your risk profile NFT has been minted successfully.
-                  </p>
-                </div>
-              )}
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
         <Toaster />
       </>
     );
-  },
+  }
 );
 
 HeroSection.displayName = "HeroSection";

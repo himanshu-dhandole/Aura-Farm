@@ -1,7 +1,7 @@
+import Hero from "@/components/hero";
 import { HeroSection } from "@/components/hero-4";
 import DefaultLayout from "@/layouts/default";
 import { createWallet } from "thirdweb/wallets";
-
 
 const wallets = [
   createWallet("io.metamask"),
@@ -29,9 +29,7 @@ const avatarData = [
   },
 ];
 
-
 const Index = () => {
-  
   return (
     <DefaultLayout>
       {/* ===========================
@@ -50,6 +48,8 @@ const Index = () => {
         socialProofText="Trusted by 4+ DeFi users"
         avatars={avatarData}
       />
+
+      {/* <Hero /> */}
     </DefaultLayout>
   );
 };

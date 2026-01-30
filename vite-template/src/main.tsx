@@ -13,7 +13,7 @@ import { ThirdwebProvider } from "thirdweb/react";
 const queryClient = new QueryClient();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
+
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
         <ThirdwebProvider>
@@ -25,5 +25,5 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         </ThirdwebProvider>
       </QueryClientProvider>
     </WagmiProvider>
-  </React.StrictMode>,
+
 );
